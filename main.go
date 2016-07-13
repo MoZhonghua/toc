@@ -58,7 +58,7 @@ func main() {
 	}
 
 	br := bufio.NewScanner(r)
-	br.Buffer(nil, 1024*1024)
+	// br.Buffer(nil, 1024*1024)
 	lines := make([]string, 0)
 	for br.Scan() {
 		lines = append(lines, br.Text())
