@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -34,10 +35,20 @@ type link struct {
 
 const tocTitle = "Table of Contents"
 
+var inplace bool
+
 func main() {
+	flag.BoolVar(&inplace, "i", false, "inplace output")
+	flag.Parse()
+
+	if inplace && len(flag.Args()) < 1 {
+		fmt.Printf("no input file name to inplace write")
+		return
+	}
+
 	var r io.Reader
-	if len(os.Args) >= 2 {
-		data, err := ioutil.ReadFile(os.Args[1])
+	if len(flag.Args()) >= 1 {
+		data, err := ioutil.ReadFile(flag.Args()[0])
 		if err != nil {
 			panic(err)
 		}
@@ -73,20 +84,22 @@ func main() {
 		}
 
 		if level == 0 {
+			if strings.HasPrefix(l, "<a name") {
+				prelineIsAnchor = true
+				continue
+			}
 			if !insideOldToc {
 				fmt.Fprintln(body, l)
 			}
 
-			if strings.HasPrefix(l, "<a name") {
-				prelineIsAnchor = true
-			}
 			continue
 		}
 
 		if !insideOldToc {
 			links = append(links, link{level, title})
+			fmt.Fprintf(body, "<a name=\"%s\"></a>\n", title)
 			if !prelineIsAnchor {
-				fmt.Fprintf(body, "<a name=\"%s\"></a>\n", title)
+				//fmt.Fprintf(body, "<a name=\"%s\"></a>\n", title)
 			}
 			fmt.Fprintln(body, l)
 		}
@@ -94,14 +107,45 @@ func main() {
 		prelineIsAnchor = false
 	}
 
-	fmt.Printf("## %s\n\n", tocTitle)
+	toc := bytes.NewBuffer(nil)
+	fmt.Fprintf(toc, "## %s\n\n", tocTitle)
 	for _, l := range links {
 		for i := 1; i < l.level; i++ {
-			fmt.Print("  ")
+			fmt.Fprint(toc, "  ")
 		}
-		fmt.Printf("* [%s](#%s)\n", l.title, l.title)
+		fmt.Fprintf(toc, "* [%s](#%s)\n", l.title, l.title)
 	}
 
-	fmt.Printf("\n\n")
-	io.Copy(os.Stdout, body)
+	fmt.Fprintf(toc, "\n\n")
+
+	if !inplace {
+		io.Copy(os.Stdout, toc)
+		io.Copy(os.Stdout, body)
+		return
+	}
+
+	tmp, err := ioutil.TempFile(".", "XXXXXX.md")
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = io.Copy(tmp, toc)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = io.Copy(tmp, body)
+	if err != nil {
+		panic(err)
+	}
+
+	tmpFileName := tmp.Name()
+	tmp.Close()
+
+	err = os.Rename(tmpFileName, flag.Args()[0])
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Done!")
 }
