@@ -28,17 +28,39 @@ func splitTitle(line string) (int, string) {
 	return count - 1, title
 }
 
+var idx = 0
+
+func genUniqueId() string {
+	idx++
+	return fmt.Sprintf("toc_link_%03d", idx)
+}
+
 type link struct {
 	level int
 	title string
+	id    string
 }
 
 const tocTitle = "Table of Contents"
 
 var inplace bool
+var legacy bool
+
+func isAnchor(s string) bool {
+	if strings.HasPrefix(s, "<a name=\"__toc_link") {
+		return true
+	}
+
+	if legacy && strings.HasPrefix(s, "<a name=") {
+		return true
+	}
+
+	return false
+}
 
 func main() {
 	flag.BoolVar(&inplace, "i", false, "inplace output")
+	flag.BoolVar(&legacy, "l", false, "legacy anchor")
 	flag.Parse()
 
 	if inplace && len(flag.Args()) < 1 {
@@ -84,7 +106,7 @@ func main() {
 		}
 
 		if level == 0 {
-			if strings.HasPrefix(l, "<a name") {
+			if isAnchor(l) {
 				prelineIsAnchor = true
 				continue
 			}
@@ -96,8 +118,9 @@ func main() {
 		}
 
 		if !insideOldToc {
-			links = append(links, link{level, title})
-			fmt.Fprintf(body, "<a name=\"%s\"></a>\n", title)
+			id := genUniqueId()
+			links = append(links, link{level, title, id})
+			fmt.Fprintf(body, "<a name=\"%s\"></a>\n", id)
 			if !prelineIsAnchor {
 				//fmt.Fprintf(body, "<a name=\"%s\"></a>\n", title)
 			}
@@ -113,7 +136,7 @@ func main() {
 		for i := 1; i < l.level; i++ {
 			fmt.Fprint(toc, "  ")
 		}
-		fmt.Fprintf(toc, "* [%s](#%s)\n", l.title, l.title)
+		fmt.Fprintf(toc, "* [%s](#%s)\n", l.title, l.id)
 	}
 
 	fmt.Fprintf(toc, "\n\n")
