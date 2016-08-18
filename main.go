@@ -30,9 +30,11 @@ func splitTitle(line string) (int, string) {
 
 var idx = 0
 
+var anchorPrefix = "toc_link"
+
 func genUniqueId() string {
 	idx++
-	return fmt.Sprintf("toc_link_%03d", idx)
+	return fmt.Sprintf("%s_%03d", anchorPrefix, idx)
 }
 
 type link struct {
@@ -47,7 +49,8 @@ var inplace bool
 var legacy bool
 
 func isAnchor(s string) bool {
-	if strings.HasPrefix(s, "<a name=\"__toc_link") {
+	pattern := fmt.Sprintf("<a name=\"%s_", anchorPrefix)
+	if strings.HasPrefix(s, pattern) {
 		return true
 	}
 
@@ -93,7 +96,6 @@ func main() {
 
 	links := make([]link, 0)
 	body := bytes.NewBuffer(nil)
-	prelineIsAnchor := false
 	insideOldToc := false
 	for _, l := range lines {
 		level, title := splitTitle(l)
@@ -105,11 +107,11 @@ func main() {
 			}
 		}
 
+		if isAnchor(l) {
+			continue
+		}
+
 		if level == 0 {
-			if isAnchor(l) {
-				prelineIsAnchor = true
-				continue
-			}
 			if !insideOldToc {
 				fmt.Fprintln(body, l)
 			}
@@ -121,13 +123,8 @@ func main() {
 			id := genUniqueId()
 			links = append(links, link{level, title, id})
 			fmt.Fprintf(body, "<a name=\"%s\"></a>\n", id)
-			if !prelineIsAnchor {
-				//fmt.Fprintf(body, "<a name=\"%s\"></a>\n", title)
-			}
 			fmt.Fprintln(body, l)
 		}
-
-		prelineIsAnchor = false
 	}
 
 	toc := bytes.NewBuffer(nil)
